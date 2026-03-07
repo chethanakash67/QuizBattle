@@ -1,0 +1,101 @@
+/* ─── App Shell ─────────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #fff;
+}
+
+/* ─── Header ────────────────────────────────────────────────── */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  height: 58px;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.logo-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #111;
+}
+.logo-icon { font-size: 1.3rem; }
+.logo-text { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.5px; }
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: #aaa;
+}
+.breadcrumb span { transition: color 0.2s; }
+.bc-active { color: #111 !important; font-weight: 600; }
+.bc-sep { color: #ccc; }
+
+.auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.user-chip {
+  font-size: 0.8rem;
+  color: #555;
+  background: #f2f2f2;
+  border: 1px solid #e0e0e0;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+}
+.auth-btn {
+  border: 1px solid #d0d0d0;
+  background: #fff;
+  color: #333;
+  border-radius: 8px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.auth-btn:hover { border-color: #111; color: #111; }
+
+/* ─── Main ──────────────────────────────────────────────────── */
+.app-main {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2.5rem 1rem 3rem;
+}
+
+/* ─── Footer ────────────────────────────────────────────────── */
+.app-footer {
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.78rem;
+  color: #bbb;
+  border-top: 1px solid #ebebeb;
+}
+
+@media (max-width: 760px) {
+  .app-header {
+    padding: 0 0.8rem;
+    gap: 0.5rem;
+    height: auto;
+    min-height: 58px;
+  }
+  .logo-text { display: none; }
+  .breadcrumb { font-size: 0.74rem; }
+  .auth-btn { padding: 0.3rem 0.55rem; }
+  .user-chip { display: none; }
+}
