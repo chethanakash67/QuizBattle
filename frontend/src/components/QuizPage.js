@@ -15,7 +15,12 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
   const [timerInput, setTimerInput] = useState('');
   const [questionCountInput, setQuestionCountInput] = useState('');
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(null);
+  const [settings, setSettings] = useState({
+    shuffleQuestions: true,
+    shuffleOptions: true
+  });
   const [showConfirm, setShowConfirm] = useState(false);
+  const [flaggedQuestions, setFlaggedQuestions] = useState({});
   const intervalRef = useRef(null);
   const answersRef = useRef(answers);
   const sessionRef = useRef(session);
@@ -29,29 +34,35 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
   }, [session]);
 
   /* ── Start quiz session ──────────────────────────────────── */
-  const startSession = useCallback(async (timerSeconds = null, questionLimit = null) => {
+  const startSession = useCallback(async (
+    timerSeconds = null,
+    questionLimit = null,
+    quizSettings = settings
+  ) => {
+    clearInterval(intervalRef.current);
     setLoading(true);
     setError('');
     try {
       const res = await axios.post('/api/quiz/start', {
         questions: rawQuestions,
-        question_limit: questionLimit
+        question_limit: questionLimit,
+        shuffle_questions: quizSettings.shuffleQuestions,
+        shuffle_options: quizSettings.shuffleOptions
       });
       const data = res.data;
       setSession(data);
       onQuizReady(data);
       setCurrentIdx(0);
       setAnswers({});
-      if (timerSeconds) {
-        setTimer(timerSeconds);
-        setTimeLeft(timerSeconds);
-      }
+      setFlaggedQuestions({});
+      setTimer(timerSeconds || null);
+      setTimeLeft(timerSeconds || 0);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to start quiz.');
     } finally {
       setLoading(false);
     }
-  }, [rawQuestions, onQuizReady]);
+  }, [onQuizReady, rawQuestions, settings]);
 
   /* ── Timer tick ──────────────────────────────────────────── */
   useEffect(() => {
@@ -78,7 +89,7 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
       ? Math.min(Math.max(parsedQuestionCount, 1), rawQuestions.length)
       : rawQuestions.length;
     setSelectedQuestionCount(clampedQuestionCount);
-    startSession(secs, clampedQuestionCount);
+    startSession(secs, clampedQuestionCount, settings);
   };
 
   /* ── Select answer ───────────────────────────────────────── */
@@ -90,6 +101,17 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
   const goTo = (idx) => setCurrentIdx(idx);
   const goPrev = () => setCurrentIdx((i) => Math.max(0, i - 1));
   const goNext = () => setCurrentIdx((i) => Math.min(session.questions.length - 1, i + 1));
+  const toggleFlag = (questionId) => {
+    setFlaggedQuestions((prev) => {
+      const key = String(questionId);
+      if (prev[key]) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: true };
+    });
+  };
 
   /* ── Submit ──────────────────────────────────────────────── */
   const handleSubmit = useCallback(async (auto = false) => {
@@ -110,12 +132,15 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
         session_id: activeSession.session_id,
         answers: answersRef.current
       });
-      onSubmit(res.data);
+        onSubmit({
+          ...res.data,
+          flagged_ids: Object.keys(flaggedQuestions)
+        });
     } catch (err) {
       setError(err.response?.data?.error || 'Submission failed.');
       setSubmitting(false);
     }
-  }, [onSubmit, showConfirm]);
+  }, [flaggedQuestions, onSubmit, showConfirm]);
 
   useEffect(() => {
     if (!sessionRef.current) {
@@ -203,6 +228,27 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
             </label>
           </div>
 
+          <div className="timer-option timer-toggle-group">
+            <button
+              className={`toggle-chip ${settings.shuffleQuestions ? 'toggle-chip-active' : ''}`}
+              onClick={() => setSettings((prev) => ({
+                ...prev,
+                shuffleQuestions: !prev.shuffleQuestions
+              }))}
+            >
+              {settings.shuffleQuestions ? 'Questions shuffled' : 'Questions in source order'}
+            </button>
+            <button
+              className={`toggle-chip ${settings.shuffleOptions ? 'toggle-chip-active' : ''}`}
+              onClick={() => setSettings((prev) => ({
+                ...prev,
+                shuffleOptions: !prev.shuffleOptions
+              }))}
+            >
+              {settings.shuffleOptions ? 'Options shuffled' : 'Options in source order'}
+            </button>
+          </div>
+
           <div className="timer-option">
             <label className="option-label">
               <span>Add a timer? (optional)</span>
@@ -258,6 +304,8 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
   const answered = Object.keys(answers).length;
   const progressPct = Math.round((answered / total) * 100);
   const timerWarning = timer && timeLeft <= 60;
+  const flaggedCount = Object.keys(flaggedQuestions).length;
+  const currentFlagged = Boolean(flaggedQuestions[String(q.id)]);
 
   return (
     <div className="quiz-page">
@@ -277,7 +325,12 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
       </div>
 
       <div className="quiz-shortcuts">
-        Use `1-4` or `A-D` to answer, `←` and `→` to move.
+        Use number keys or option letters to answer, `←` and `→` to move.
+      </div>
+
+      <div className="quiz-status-row">
+        <span>{total - answered} remaining</span>
+        <span>{flaggedCount} marked for review</span>
       </div>
 
       {/* ── Progress bar ── */}
@@ -289,6 +342,12 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
       <div className="question-card">
         <p className="question-number">Q{currentIdx + 1}</p>
         <h2 className="question-text">{q.question}</h2>
+        <button
+          className={`review-toggle ${currentFlagged ? 'review-toggle-active' : ''}`}
+          onClick={() => toggleFlag(q.id)}
+        >
+          {currentFlagged ? 'Marked for review' : 'Mark for review'}
+        </button>
 
         {/* Options */}
         {q.options && q.options.length > 0 ? (
@@ -350,10 +409,16 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
           <button
             key={qq.id}
             title={`Q${idx + 1}`}
-            className={`dot ${idx === currentIdx ? 'dot-current' : ''} ${answers[String(qq.id)] ? 'dot-answered' : ''}`}
+            className={`dot ${idx === currentIdx ? 'dot-current' : ''} ${answers[String(qq.id)] ? 'dot-answered' : ''} ${flaggedQuestions[String(qq.id)] ? 'dot-flagged' : ''}`}
             onClick={() => goTo(idx)}
           />
         ))}
+      </div>
+
+      <div className="dot-legend">
+        <span><i className="dot-legend-swatch dot-legend-current" /> Current</span>
+        <span><i className="dot-legend-swatch dot-legend-answered" /> Answered</span>
+        <span><i className="dot-legend-swatch dot-legend-flagged" /> Review</span>
       </div>
 
       {/* ── Confirm submit modal ── */}
