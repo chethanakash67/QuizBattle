@@ -22,6 +22,14 @@
   text-align: right;
 }
 
+.quiz-status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.82rem;
+  color: #6c6c6c;
+}
+
 .quiz-timer {
   font-size: 0.92rem;
   font-weight: 700;
@@ -81,7 +89,31 @@
   font-weight: 600;
   color: #111;
   line-height: 1.55;
-  margin-bottom: 1.6rem;
+  margin-bottom: 1rem;
+}
+
+.review-toggle {
+  border: 1px solid #d7d7d7;
+  background: #fafafa;
+  color: #555;
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  margin-bottom: 1.3rem;
+}
+
+.review-toggle:hover {
+  border-color: #111;
+  color: #111;
+}
+
+.review-toggle-active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
 }
 
 /* ─── Options ───────────────────────────────────────────────── */
@@ -195,6 +227,45 @@
 .dot:hover { transform: scale(1.3); }
 .dot-answered { background: #888; }
 .dot-current { background: #111 !important; transform: scale(1.2); }
+.dot-flagged {
+  box-shadow: 0 0 0 2px #d3d3d3;
+}
+
+.dot-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: #7a7a7a;
+  font-size: 0.78rem;
+}
+
+.dot-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dot-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  background: #e0e0e0;
+}
+
+.dot-legend-current {
+  background: #111;
+}
+
+.dot-legend-answered {
+  background: #888;
+}
+
+.dot-legend-flagged {
+  background: #e0e0e0;
+  box-shadow: 0 0 0 2px #d3d3d3;
+}
 
 /* ─── Loading ───────────────────────────────────────────────── */
 .quiz-loading {
@@ -249,6 +320,35 @@
 .modal-sub { font-size: 0.88rem; color: #888; margin-bottom: 1.5rem; }
 
 .timer-option { margin-bottom: 1.4rem; }
+.timer-toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.toggle-chip {
+  border: 1px solid #d6d6d6;
+  background: #fafafa;
+  color: #555;
+  border-radius: 999px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.toggle-chip:hover {
+  border-color: #111;
+  color: #111;
+}
+
+.toggle-chip-active {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+
 .option-label {
   display: flex;
   align-items: center;
@@ -297,6 +397,11 @@
 
   .quiz-shortcuts {
     text-align: left;
+  }
+
+  .quiz-status-row {
+    flex-direction: column;
+    gap: 0.4rem;
   }
 
   .question-card {
