@@ -91,7 +91,7 @@
 
 .results-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.8rem;
 }
 .summary-card {
@@ -136,6 +136,28 @@
 }
 .tab-btn:hover { color: #555; }
 .tab-active { color: #111 !important; border-color: #111 !important; }
+
+.results-tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.results-search {
+  width: min(100%, 320px);
+  border: 1.5px solid #d7d7d7;
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  color: #222;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.results-search:focus {
+  border-color: #111;
+  box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.08);
+}
 
 /* ─── Detail cards ──────────────────────────────────────────── */
 .detail-list { display: flex; flex-direction: column; gap: 0.9rem; }
@@ -218,6 +240,15 @@
   font-style: italic;
 }
 
+.results-empty {
+  border: 1px dashed #dcdcdc;
+  border-radius: 12px;
+  background: #fbfbfb;
+  padding: 1rem 1.1rem;
+  color: #777;
+  text-align: center;
+}
+
 /* ─── Shared buttons ────────────────────────────────────────── */
 .btn-primary {
   display: inline-flex;
@@ -256,6 +287,8 @@
   .stat-num { font-size: 1.2rem; }
   .results-summary { grid-template-columns: 1fr; }
   .results-actions { flex-direction: column; }
+  .results-tools { justify-content: stretch; }
   .results-actions .btn-primary,
-  .results-actions .btn-ghost { width: 100%; }
+  .results-actions .btn-ghost,
+  .results-search { width: 100%; }
 }
