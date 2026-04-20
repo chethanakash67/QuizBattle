@@ -2,11 +2,22 @@ import React, { useState } from 'react';
 import './ResultsPage.css';
 
 export default function ResultsPage({ results, onRetake, onHome }) {
-  const { total, correct, wrong, unanswered, answered, percentage, results: details } = results;
-  const [filter, setFilter] = useState('all'); // all | correct | wrong
+  const {
+    total,
+    correct,
+    wrong,
+    unanswered,
+    answered,
+    percentage,
+    flagged_ids: flaggedIds = [],
+    results: details
+  } = results;
+  const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
   const answeredCount = answered ?? (total - unanswered);
   const accuracy = answeredCount > 0 ? Math.round((correct / answeredCount) * 100) : 0;
   const skippedRate = total > 0 ? Math.round((unanswered / total) * 100) : 0;
+  const flaggedSet = new Set(flaggedIds.map(String));
 
   const grade = () => {
     if (percentage >= 90) return { label: 'Excellent', cls: 'grade-a' };
@@ -18,8 +29,14 @@ export default function ResultsPage({ results, onRetake, onHome }) {
 
   const filtered = details.filter((r) => {
     if (filter === 'correct') return r.is_correct;
-    if (filter === 'wrong') return !r.is_correct;
+    if (filter === 'wrong') return !r.is_correct && !!r.user_answer;
+    if (filter === 'skipped') return !r.user_answer;
+    if (filter === 'flagged') return flaggedSet.has(String(r.id));
     return true;
+  }).filter((r) => {
+    if (!query.trim()) return true;
+    const text = `${r.question} ${r.explanation || ''}`.toLowerCase();
+    return text.includes(query.toLowerCase());
   });
 
   /* Helper: get option text from label */
@@ -119,19 +136,37 @@ export default function ResultsPage({ results, onRetake, onHome }) {
           <span className="summary-value">{skippedRate}%</span>
           <span className="summary-label">Skipped Rate</span>
         </div>
+        <div className="summary-card">
+          <span className="summary-value">{flaggedIds.length}</span>
+          <span className="summary-label">Marked For Review</span>
+        </div>
       </div>
 
       {/* ── Filter tabs ── */}
       <div className="filter-tabs">
-        {['all', 'correct', 'wrong'].map((f) => (
+        {['all', 'correct', 'wrong', 'skipped', 'flagged'].map((f) => (
           <button
             key={f}
             className={`tab-btn ${filter === f ? 'tab-active' : ''}`}
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? `All (${total})` : f === 'correct' ? `✓ Correct (${correct})` : `✗ Wrong (${wrong + unanswered})`}
+            {f === 'all' && `All (${total})`}
+            {f === 'correct' && `✓ Correct (${correct})`}
+            {f === 'wrong' && `✗ Wrong (${wrong})`}
+            {f === 'skipped' && `○ Skipped (${unanswered})`}
+            {f === 'flagged' && `⚑ Review (${flaggedIds.length})`}
           </button>
         ))}
+      </div>
+
+      <div className="results-tools">
+        <input
+          className="results-search"
+          type="search"
+          placeholder="Search questions or explanations"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
       </div>
 
       {/* ── Detail list ── */}
@@ -139,9 +174,12 @@ export default function ResultsPage({ results, onRetake, onHome }) {
         {filtered.map((item) => (
           <div key={item.id} className={`detail-card ${item.is_correct ? 'dc-correct' : 'dc-wrong'}`}>
             <div className="dc-header">
-              <span className="dc-num">Q{item.id}</span>
+              <span className="dc-num">
+                Q{item.id}
+                {flaggedSet.has(String(item.id)) ? ' • Review' : ''}
+              </span>
               <span className={`dc-badge ${item.is_correct ? 'badge-correct' : 'badge-wrong'}`}>
-                {item.is_correct ? '✓ Correct' : '✗ Incorrect'}
+                {item.is_correct ? '✓ Correct' : item.user_answer ? '✗ Incorrect' : '○ Skipped'}
               </span>
             </div>
             <p className="dc-question">{item.question}</p>
@@ -176,6 +214,11 @@ export default function ResultsPage({ results, onRetake, onHome }) {
             )}
           </div>
         ))}
+        {filtered.length === 0 && (
+          <div className="results-empty">
+            No questions match this filter.
+          </div>
+        )}
       </div>
     </div>
   );
