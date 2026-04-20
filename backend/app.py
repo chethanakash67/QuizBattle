@@ -1,5 +1,4 @@
 import os
-import json
 import re
 import random
 import uuid
@@ -19,6 +18,13 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 sessions = {}
 auth_tokens = {}
 user_histories = {}
+
+
+def remove_file_safely(filepath):
+    try:
+        os.remove(filepath)
+    except FileNotFoundError:
+        pass
 
 
 def get_auth_token():
@@ -277,7 +283,7 @@ def upload_pdf():
         text = extract_text_pypdf2(filepath)
 
     if not text.strip():
-        os.remove(filepath)
+        remove_file_safely(filepath)
         return jsonify({"error": "Could not extract text from PDF"}), 400
 
     # Parse questions
@@ -286,13 +292,13 @@ def upload_pdf():
         questions = parse_questions_fallback(text)
 
     if not questions:
-        os.remove(filepath)
+        remove_file_safely(filepath)
         return jsonify({
             "error": "No questions found. Please ensure your PDF has numbered questions (e.g., '1. Question?') with answers (e.g., 'Answer: A')."
         }), 400
 
     # Clean up file
-    os.remove(filepath)
+    remove_file_safely(filepath)
 
     return jsonify({
         "success": True,
@@ -303,7 +309,7 @@ def upload_pdf():
 
 @app.route("/api/quiz/start", methods=["POST"])
 def start_quiz():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     questions = data.get("questions", [])
     question_limit = data.get("question_limit")
 
@@ -376,7 +382,7 @@ def start_quiz():
 
 @app.route("/api/quiz/submit", methods=["POST"])
 def submit_quiz():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     session_id = data.get("session_id")
     user_answers = data.get("answers", {})
 
@@ -389,24 +395,28 @@ def submit_quiz():
 
     correct = 0
     wrong = 0
+    unanswered = 0
     results = []
 
     for q in questions:
         q_id = str(q["id"])
         user_ans = user_answers.get(q_id, "").strip().upper()
         correct_ans = q["answer"].strip().upper()
+        was_answered = bool(user_ans)
 
         # Handle label-based answers
         is_correct = False
-        if len(correct_ans) == 1 and correct_ans in "ABCD":
+        if was_answered and len(correct_ans) == 1 and correct_ans in "ABCD":
             is_correct = user_ans == correct_ans
-        else:
+        elif was_answered:
             is_correct = user_ans.lower() == correct_ans.lower()
 
         if is_correct:
             correct += 1
-        else:
+        elif was_answered:
             wrong += 1
+        else:
+            unanswered += 1
 
         results.append({
             "id": q["id"],
@@ -431,7 +441,8 @@ def submit_quiz():
             "total": total,
             "correct": correct,
             "wrong": wrong,
-            "unanswered": total - correct - wrong,
+            "unanswered": unanswered,
+            "answered": total - unanswered,
             "percentage": percentage
         }
         user_histories.setdefault(username, []).insert(0, history_item)
@@ -440,7 +451,8 @@ def submit_quiz():
         "total": total,
         "correct": correct,
         "wrong": wrong,
-        "unanswered": total - correct - wrong,
+        "unanswered": unanswered,
+        "answered": total - unanswered,
         "percentage": percentage,
         "results": results
     })

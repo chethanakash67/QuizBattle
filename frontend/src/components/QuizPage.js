@@ -17,6 +17,16 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const intervalRef = useRef(null);
+  const answersRef = useRef(answers);
+  const sessionRef = useRef(session);
+
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   /* ── Start quiz session ──────────────────────────────────── */
   const startSession = useCallback(async (timerSeconds = null, questionLimit = null) => {
@@ -82,9 +92,14 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
   const goNext = () => setCurrentIdx((i) => Math.min(session.questions.length - 1, i + 1));
 
   /* ── Submit ──────────────────────────────────────────────── */
-  const handleSubmit = async (auto = false) => {
+  const handleSubmit = useCallback(async (auto = false) => {
+    const activeSession = sessionRef.current;
     if (!auto && !showConfirm) {
       setShowConfirm(true);
+      return;
+    }
+    if (!activeSession?.session_id) {
+      setError('Quiz session expired. Please start again.');
       return;
     }
     setShowConfirm(false);
@@ -92,15 +107,71 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
     setSubmitting(true);
     try {
       const res = await axios.post('/api/quiz/submit', {
-        session_id: session.session_id,
-        answers
+        session_id: activeSession.session_id,
+        answers: answersRef.current
       });
       onSubmit(res.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Submission failed.');
       setSubmitting(false);
     }
-  };
+  }, [onSubmit, showConfirm]);
+
+  useEffect(() => {
+    if (!sessionRef.current) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      const targetTag = event.target.tagName;
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA') {
+        return;
+      }
+
+      const activeSession = sessionRef.current;
+      const currentQuestion = activeSession?.questions?.[currentIdx];
+      if (!currentQuestion) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        goPrev();
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        if (currentIdx < activeSession.questions.length - 1) {
+          goNext();
+        } else {
+          handleSubmit(false);
+        }
+        return;
+      }
+
+      if (!currentQuestion.options?.length) {
+        return;
+      }
+
+      const normalizedKey = event.key.toUpperCase();
+      const optionIndex = Number.parseInt(event.key, 10) - 1;
+      if (Number.isInteger(optionIndex) && currentQuestion.options[optionIndex]) {
+        event.preventDefault();
+        selectAnswer(currentQuestion.id, currentQuestion.options[optionIndex].label);
+        return;
+      }
+
+      const matchedOption = currentQuestion.options.find((option) => option.label === normalizedKey);
+      if (matchedOption) {
+        event.preventDefault();
+        selectAnswer(currentQuestion.id, matchedOption.label);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIdx, handleSubmit, session]);
 
   /* ── Format timer ────────────────────────────────────────── */
   const formatTime = (s) => {
@@ -203,6 +274,10 @@ export default function QuizPage({ rawQuestions, quizData, onQuizReady, onSubmit
             ⏱ {formatTime(timeLeft)}
           </div>
         )}
+      </div>
+
+      <div className="quiz-shortcuts">
+        Use `1-4` or `A-D` to answer, `←` and `→` to move.
       </div>
 
       {/* ── Progress bar ── */}

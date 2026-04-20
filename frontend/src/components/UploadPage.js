@@ -9,6 +9,12 @@ export default function UploadPage({ onParsed, isLoggedIn, username, history }) 
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
   const inputRef = useRef();
+  const attemptCount = history.length;
+  const bestScore = attemptCount ? Math.max(...history.map((item) => item.percentage || 0)) : 0;
+  const averageScore = attemptCount
+    ? Math.round(history.reduce((sum, item) => sum + (item.percentage || 0), 0) / attemptCount)
+    : 0;
+  const latestAttempt = history[0] || null;
 
   const handleFile = (f) => {
     if (!f) return;
@@ -43,6 +49,9 @@ export default function UploadPage({ onParsed, isLoggedIn, username, history }) 
       const res = await axios.post('/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (ev) => {
+          if (!ev.total) {
+            return;
+          }
           setProgress(Math.round((ev.loaded * 100) / ev.total));
         }
       });
@@ -154,6 +163,26 @@ Answer: C`}</pre>
       {isLoggedIn && (
         <div className="history-card">
           <h3 className="history-title">{username}'s Previous Attempts</h3>
+          {attemptCount > 0 && (
+            <div className="history-stats">
+              <div className="history-stat">
+                <span className="history-stat-value">{attemptCount}</span>
+                <span className="history-stat-label">Attempts</span>
+              </div>
+              <div className="history-stat">
+                <span className="history-stat-value">{bestScore}%</span>
+                <span className="history-stat-label">Best Score</span>
+              </div>
+              <div className="history-stat">
+                <span className="history-stat-value">{averageScore}%</span>
+                <span className="history-stat-label">Average</span>
+              </div>
+              <div className="history-stat">
+                <span className="history-stat-value">{latestAttempt?.percentage ?? 0}%</span>
+                <span className="history-stat-label">Latest</span>
+              </div>
+            </div>
+          )}
           {history.length === 0 ? (
             <p className="history-empty">No history yet. Complete a quiz to start tracking.</p>
           ) : (

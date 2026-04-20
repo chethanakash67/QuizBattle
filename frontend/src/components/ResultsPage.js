@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import './ResultsPage.css';
 
 export default function ResultsPage({ results, onRetake, onHome }) {
-  const { total, correct, wrong, unanswered, percentage, results: details } = results;
+  const { total, correct, wrong, unanswered, answered, percentage, results: details } = results;
   const [filter, setFilter] = useState('all'); // all | correct | wrong
+  const answeredCount = answered ?? (total - unanswered);
+  const accuracy = answeredCount > 0 ? Math.round((correct / answeredCount) * 100) : 0;
+  const skippedRate = total > 0 ? Math.round((unanswered / total) * 100) : 0;
 
   const grade = () => {
     if (percentage >= 90) return { label: 'Excellent', cls: 'grade-a' };
@@ -24,6 +27,32 @@ export default function ResultsPage({ results, onRetake, onHome }) {
     if (!options || !options.length) return label;
     const found = options.find((o) => o.label.toUpperCase() === label.toUpperCase());
     return found ? `${found.label}. ${found.text}` : label;
+  };
+
+  const exportResults = () => {
+    const rows = [
+      ['Question No', 'Question', 'Your Answer', 'Correct Answer', 'Result', 'Explanation'],
+      ...details.map((item) => ([
+        item.id,
+        item.question,
+        item.user_answer ? getOptionText(item.options, item.user_answer) : 'Not answered',
+        getOptionText(item.options, item.correct_answer),
+        item.is_correct ? 'Correct' : item.user_answer ? 'Incorrect' : 'Skipped',
+        item.explanation || ''
+      ]))
+    ];
+
+    const csv = rows
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `quizcraft-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -74,6 +103,22 @@ export default function ResultsPage({ results, onRetake, onHome }) {
       <div className="results-actions">
         <button className="btn-ghost" onClick={onHome}>← New PDF</button>
         <button className="btn-primary" onClick={onRetake}>Retake Quiz ↺</button>
+        <button className="btn-ghost" onClick={exportResults}>Export CSV</button>
+      </div>
+
+      <div className="results-summary">
+        <div className="summary-card">
+          <span className="summary-value">{answeredCount}/{total}</span>
+          <span className="summary-label">Questions Attempted</span>
+        </div>
+        <div className="summary-card">
+          <span className="summary-value">{accuracy}%</span>
+          <span className="summary-label">Accuracy On Attempted</span>
+        </div>
+        <div className="summary-card">
+          <span className="summary-value">{skippedRate}%</span>
+          <span className="summary-label">Skipped Rate</span>
+        </div>
       </div>
 
       {/* ── Filter tabs ── */}
@@ -91,10 +136,10 @@ export default function ResultsPage({ results, onRetake, onHome }) {
 
       {/* ── Detail list ── */}
       <div className="detail-list">
-        {filtered.map((item, idx) => (
+        {filtered.map((item) => (
           <div key={item.id} className={`detail-card ${item.is_correct ? 'dc-correct' : 'dc-wrong'}`}>
             <div className="dc-header">
-              <span className="dc-num">Q{idx + 1}</span>
+              <span className="dc-num">Q{item.id}</span>
               <span className={`dc-badge ${item.is_correct ? 'badge-correct' : 'badge-wrong'}`}>
                 {item.is_correct ? '✓ Correct' : '✗ Incorrect'}
               </span>

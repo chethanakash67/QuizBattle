@@ -80,8 +80,21 @@ Answer: C
 - **Optional countdown timer** (set in minutes)
 - **Confirmation dialog** before submitting
 - **Detailed results**: score, %, correct/wrong/skipped per question
+- **Results export** to CSV for revision or sharing
+- **Keyboard shortcuts** during quizzes (`1-4`, `A-D`, arrow keys)
+- **History insights** for logged-in users: attempts, best, average, latest
 - **Retake** or **start fresh** at any time
 - Minimal **black & white** design
+
+## Checks
+
+```bash
+cd backend
+PYTHONPATH=. ./venv/bin/python -m unittest discover -s tests
+
+cd ../frontend
+npm run build
+```
 
 ---
 

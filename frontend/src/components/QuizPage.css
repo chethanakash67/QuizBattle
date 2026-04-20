@@ -16,6 +16,11 @@
 .quiz-count { font-size: 0.88rem; color: #555; }
 .quiz-count strong { color: #111; }
 .quiz-answered { font-size: 0.82rem; color: #aaa; }
+.quiz-shortcuts {
+  font-size: 0.8rem;
+  color: #8a8a8a;
+  text-align: right;
+}
 
 .quiz-timer {
   font-size: 0.92rem;
@@ -277,3 +282,58 @@
 
 .confirm-modal p { font-size: 0.92rem; color: #555; line-height: 1.6; }
 .warn-text { color: #888; font-style: italic; }
+
+@media (max-width: 640px) {
+  .quiz-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .quiz-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .quiz-shortcuts {
+    text-align: left;
+  }
+
+  .question-card {
+    padding: 1.4rem 1.1rem;
+  }
+
+  .quiz-nav {
+    flex-direction: column-reverse;
+  }
+
+  .quiz-nav .btn-primary,
+  .quiz-nav .btn-ghost {
+    width: 100%;
+  }
+
+  .option-label {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .timer-input {
+    width: 100%;
+    text-align: left;
+  }
+
+  .timer-modal,
+  .confirm-modal {
+    padding: 1.5rem 1.2rem;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .modal-actions .btn-primary,
+  .modal-actions .btn-ghost {
+    width: 100%;
+  }
+}
