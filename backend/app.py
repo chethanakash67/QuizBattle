@@ -11,7 +11,8 @@ import PyPDF2
 app = Flask(__name__)
 CORS(app)
 
-UPLOAD_FOLDER = "uploads"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # In-memory store for quiz sessions
@@ -37,6 +38,37 @@ def get_auth_token():
 def get_current_user():
     token = get_auth_token()
     return auth_tokens.get(token)
+
+
+def normalize_text(value):
+    return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def normalize_choice_token(value):
+    normalized = normalize_text(value).upper().rstrip(".):")
+    if normalized in {"TRUE", "T"}:
+        return "TRUE"
+    if normalized in {"FALSE", "F"}:
+        return "FALSE"
+    return normalized
+
+
+def build_choice_map(options):
+    choice_map = {}
+    for option in options or []:
+        label = normalize_choice_token(option.get("label"))
+        text = normalize_choice_token(option.get("text"))
+        if label:
+            choice_map[label] = label
+        if text:
+            choice_map[text] = label or text
+    return choice_map
+
+
+def resolve_correct_answer(raw_answer, options):
+    normalized_answer = normalize_choice_token(raw_answer)
+    choice_map = build_choice_map(options)
+    return choice_map.get(normalized_answer, normalized_answer)
 
 
 def extract_text_pdfplumber(filepath):
@@ -118,7 +150,7 @@ def parse_questions(text):
             while j < len(lines):
                 next_line = lines[j]
                 opt_match = re.match(
-                    r'^([A-Da-d])[.)]\s+(.+)', next_line
+                    r'^([A-Fa-f]|True|False|T|F)[.)]?\s+(.+)', next_line, re.IGNORECASE
                 )
                 ans_match = match_answer_line(next_line)
                 next_q_match = match_question_line(next_line)
@@ -134,10 +166,10 @@ def parse_questions(text):
             # Collect options
             while i < len(lines):
                 next_line = lines[i]
-                opt_match = re.match(r'^([A-Da-d])[.)]\s+(.+)', next_line)
+                opt_match = re.match(r'^([A-Fa-f]|True|False|T|F)[.)]?\s+(.+)', next_line, re.IGNORECASE)
                 if opt_match:
                     options.append({
-                        "label": opt_match.group(1).upper(),
+                        "label": normalize_choice_token(opt_match.group(1)),
                         "text": opt_match.group(2).strip()
                     })
                     i += 1
@@ -156,7 +188,7 @@ def parse_questions(text):
                         exp_line = lines[i]
                         if match_question_line(exp_line):
                             break
-                        if re.match(r'^([A-Da-d])[.)]\s+', exp_line):
+                        if re.match(r'^([A-Fa-f]|True|False|T|F)[.)]?\s+', exp_line, re.IGNORECASE):
                             break
                         if match_answer_line(exp_line):
                             break
@@ -168,16 +200,7 @@ def parse_questions(text):
 
             if q_text and answer:
                 # Normalize answer to label if it matches option text
-                answer_label = answer.upper().strip(".")
-                if len(answer_label) == 1 and answer_label in "ABCD":
-                    correct = answer_label
-                else:
-                    # Try to match answer text to option text
-                    correct = answer
-                    for opt in options:
-                        if answer.lower().strip() == opt["text"].lower().strip():
-                            correct = opt["label"]
-                            break
+                correct = resolve_correct_answer(answer, options)
 
                 questions.append({
                     "id": q_num,
@@ -213,16 +236,47 @@ def parse_questions_fallback(text):
         if qa_match:
             q_text = qa_match.group(1).strip()
             a_text = qa_match.group(2).strip()
+            option_matches = re.findall(
+                r'(?:^|\n)([A-Fa-f]|True|False|T|F)[.)]?\s+([^\n]+)',
+                block,
+                re.IGNORECASE,
+            )
+            options = [
+                {"label": normalize_choice_token(label), "text": normalize_text(option_text)}
+                for label, option_text in option_matches
+            ]
             questions.append({
                 "id": q_id,
                 "question": q_text,
-                "options": [],
-                "answer": a_text,
+                "options": options,
+                "answer": resolve_correct_answer(a_text, options),
                 "explanation": ""
             })
             q_id += 1
 
     return questions
+
+
+def relabel_options(options, correct_answer):
+    if not options:
+        return options, normalize_choice_token(correct_answer)
+
+    letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    normalized_correct = resolve_correct_answer(correct_answer, options)
+    relabeled_options = []
+    mapped_answer = normalized_correct
+
+    for idx, option in enumerate(options):
+        new_label = letters[idx]
+        original_label = normalize_choice_token(option.get("label"))
+        relabeled_options.append({
+            "label": new_label,
+            "text": normalize_text(option.get("text")),
+        })
+        if original_label == normalized_correct:
+            mapped_answer = new_label
+
+    return relabeled_options, mapped_answer
 
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -275,30 +329,28 @@ def upload_pdf():
 
     filename = f"{uuid.uuid4().hex}.pdf"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
+    try:
+        file.save(filepath)
 
-    # Try pdfplumber first, fallback to PyPDF2
-    text = extract_text_pdfplumber(filepath)
-    if not text.strip():
-        text = extract_text_pypdf2(filepath)
+        # Try pdfplumber first, fallback to PyPDF2
+        text = extract_text_pdfplumber(filepath)
+        if not text.strip():
+            text = extract_text_pypdf2(filepath)
 
-    if not text.strip():
+        if not text.strip():
+            return jsonify({"error": "Could not extract text from PDF"}), 400
+
+        # Parse questions
+        questions = parse_questions(text)
+        if not questions:
+            questions = parse_questions_fallback(text)
+
+        if not questions:
+            return jsonify({
+                "error": "No questions found. Please ensure your PDF has numbered questions (e.g., '1. Question?') with answers (e.g., 'Answer: A')."
+            }), 400
+    finally:
         remove_file_safely(filepath)
-        return jsonify({"error": "Could not extract text from PDF"}), 400
-
-    # Parse questions
-    questions = parse_questions(text)
-    if not questions:
-        questions = parse_questions_fallback(text)
-
-    if not questions:
-        remove_file_safely(filepath)
-        return jsonify({
-            "error": "No questions found. Please ensure your PDF has numbered questions (e.g., '1. Question?') with answers (e.g., 'Answer: A')."
-        }), 400
-
-    # Clean up file
-    remove_file_safely(filepath)
 
     return jsonify({
         "success": True,
@@ -312,6 +364,8 @@ def start_quiz():
     data = request.get_json(silent=True) or {}
     questions = data.get("questions", [])
     question_limit = data.get("question_limit")
+    shuffle_questions = bool(data.get("shuffle_questions", True))
+    shuffle_options = bool(data.get("shuffle_options", True))
 
     if not questions:
         return jsonify({"error": "No questions provided"}), 400
@@ -329,34 +383,43 @@ def start_quiz():
     session_id = uuid.uuid4().hex
 
     # Shuffle questions
-    shuffled_questions = questions.copy()
-    random.shuffle(shuffled_questions)
-    shuffled_questions = shuffled_questions[:normalized_limit]
+    prepared_questions = questions.copy()
+    if shuffle_questions:
+        random.shuffle(prepared_questions)
+    prepared_questions = prepared_questions[:normalized_limit]
 
     # Shuffle options for each question and assign unique IDs per quiz session.
     # This avoids collisions when source PDFs reuse numbering across sections (e.g., Unit 1 and Unit 2 both start at 1).
     quiz_questions = []
-    for idx, q in enumerate(shuffled_questions, start=1):
+    for idx, q in enumerate(prepared_questions, start=1):
         opts = q.get("options", [])
         if opts:
-            shuffled_opts = opts.copy()
-            random.shuffle(shuffled_opts)
+            shuffled_opts = [
+                {
+                    "label": normalize_choice_token(opt.get("label")),
+                    "text": normalize_text(opt.get("text")),
+                }
+                for opt in opts
+            ]
+            if shuffle_options:
+                random.shuffle(shuffled_opts)
+            shuffled_opts, resolved_answer = relabel_options(shuffled_opts, q["answer"])
             quiz_questions.append({
                 "id": idx,
                 "source_id": q.get("id"),
-                "question": q["question"],
+                "question": normalize_text(q["question"]),
                 "options": shuffled_opts,
-                "answer": q["answer"],
-                "explanation": q.get("explanation", "")
+                "answer": resolved_answer,
+                "explanation": normalize_text(q.get("explanation", ""))
             })
         else:
             quiz_questions.append({
                 "id": idx,
                 "source_id": q.get("id"),
-                "question": q.get("question", ""),
+                "question": normalize_text(q.get("question", "")),
                 "options": q.get("options", []),
-                "answer": q.get("answer", ""),
-                "explanation": q.get("explanation", "")
+                "answer": normalize_text(q.get("answer", "")),
+                "explanation": normalize_text(q.get("explanation", ""))
             })
 
     sessions[session_id] = {
@@ -400,16 +463,17 @@ def submit_quiz():
 
     for q in questions:
         q_id = str(q["id"])
-        user_ans = user_answers.get(q_id, "").strip().upper()
-        correct_ans = q["answer"].strip().upper()
+        user_ans = normalize_text(user_answers.get(q_id, ""))
+        correct_ans = normalize_text(q["answer"])
         was_answered = bool(user_ans)
 
         # Handle label-based answers
         is_correct = False
-        if was_answered and len(correct_ans) == 1 and correct_ans in "ABCD":
-            is_correct = user_ans == correct_ans
+        if was_answered and q["options"]:
+            resolved_user_answer = resolve_correct_answer(user_ans, q["options"])
+            is_correct = resolved_user_answer == resolve_correct_answer(correct_ans, q["options"])
         elif was_answered:
-            is_correct = user_ans.lower() == correct_ans.lower()
+            is_correct = normalize_choice_token(user_ans) == normalize_choice_token(correct_ans)
 
         if is_correct:
             correct += 1
@@ -422,7 +486,7 @@ def submit_quiz():
             "id": q["id"],
             "question": q["question"],
             "options": q["options"],
-            "user_answer": user_ans,
+            "user_answer": resolve_correct_answer(user_ans, q["options"]) if was_answered and q["options"] else user_ans,
             "correct_answer": q["answer"],
             "is_correct": is_correct,
             "explanation": q.get("explanation", "")
